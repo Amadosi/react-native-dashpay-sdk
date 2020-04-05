@@ -7,7 +7,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ResolveInfo;
 import android.os.CountDownTimer;
+
 import androidx.appcompat.app.AppCompatActivity;
+
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -19,6 +21,7 @@ import android.widget.TextView;
 
 import java.util.List;
 
+import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
@@ -26,6 +29,8 @@ import com.facebook.react.bridge.Callback;
 import com.facebook.react.bridge.LifecycleEventListener;
 import com.facebook.react.bridge.ActivityEventListener;
 import com.facebook.react.bridge.BaseActivityEventListener;
+import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.Arguments;
 
 import android.util.Log;
 
@@ -34,15 +39,69 @@ public class RNDashpaySdkModule extends ReactContextBaseJavaModule implements Li
     private final ReactApplicationContext reactContext;
     private static final String PAYMENT_URI = "com.ar.pos";
     public static int tsn = 1;
-    public static int lastSentTsn=0;
-    private static final int PAYMENT_REQUEST = 1;
+    public static int lastSentTsn = 0;
+    private static final int PAYMENT_REQUEST = 11234;
+
+    private String NO_APP_LIST = "APP_NOT_FOUND";
+    private String APP_NOT_FOUND = "APP_NOT_FOUND";
+    private String TRN_DECLINED = "TRN_DECLINED";
+    private String TRN_FAILED = "TRN_FAILED";
+    private String TRN_CANCELLED = "TRN_CANCELLED";
+
     public static String PACKAGE_NAME;
+
+    private Promise mPaymentPromise;
+
+    private final ActivityEventListener mActivityEventListener = new BaseActivityEventListener() {
+
+        @Override
+        public void onActivityResult(Activity activity, int requestCode, int resultCode, Intent intent) {
+            if (requestCode == PAYMENT_REQUEST) {
+
+                if (mPaymentPromise != null) {
+
+                    if (resultCode == Activity.RESULT_OK) {
+
+                        String tid = intent.getStringExtra("TRANSACTION_ID");
+
+                        if (tid != null && Integer.parseInt(tid) == lastSentTsn) {
+
+                            String result = intent.getStringExtra("RESULT");
+                            String displayTest = intent.getStringExtra("DISPLAY_TEXT");
+
+                            if (result.equals("APPROVED")) {
+                                WritableMap map = Arguments.createMap();
+
+                                map.putString("response_code", intent.getStringExtra("RESPONSE_CODE"));
+                                map.putString("auth_code", intent.getStringExtra("AUTH_CODE"));
+                                map.putString("display_message", intent.getStringExtra("DISPLAY_TEXT"));
+
+                                mPaymentPromise.resolve(map);
+                                return;
+
+                            } else if (result.equals("DECLINED")) {
+                                rejectPromise(TRN_DECLINED, "Transaction declined");
+                            } else {
+                                rejectPromise(TRN_FAILED, "Transaction failed");
+                            }
+
+                            mPaymentPromise = null;
+                        }
+
+                    }
+
+                    mPaymentPromise = null;
+                }
+            }
+        }
+    };
 
     public RNDashpaySdkModule(ReactApplicationContext reactContext) {
         super(reactContext);
         this.reactContext = reactContext;
         PACKAGE_NAME = this.reactContext.getPackageName();
         this.reactContext.addLifecycleEventListener(this);
+        this.reactContext.addActivityEventListener(mActivityEventListener);
     }
 
     @Override
@@ -51,9 +110,10 @@ public class RNDashpaySdkModule extends ReactContextBaseJavaModule implements Li
     }
 
     @ReactMethod
-    public void pay(String reference, String amount) {
+    public void pay(String reference, String amount, final Promise promise) {
 
-        Log.d("Loaded Intents", PACKAGE_NAME+"");
+        Activity currentActivity = getCurrentActivity();
+        mPaymentPromise = promise;
 
         boolean found = false;
         Intent share = new Intent(android.content.Intent.ACTION_SEND);
@@ -71,8 +131,8 @@ public class RNDashpaySdkModule extends ReactContextBaseJavaModule implements Li
                     share.putExtra("AMOUNT", amount); // 15.00
                     share.putExtra("ADDITIONAL_AMOUNT", "0.00");
                     share.putExtra("OPERATOR_ID", "1");
-                    share.putExtra("REFERENCE_NUMBER",reference);
-                    share.putExtra("TRANSACTION_ID",String.valueOf(tsn));
+                    share.putExtra("REFERENCE_NUMBER", reference);
+                    share.putExtra("TRANSACTION_ID", String.valueOf(tsn));
                     lastSentTsn = tsn;
                     tsn++;
                     share.setPackage(info.activityInfo.packageName);
@@ -82,22 +142,20 @@ public class RNDashpaySdkModule extends ReactContextBaseJavaModule implements Li
             }
 
             if (!found) {
-                Log.d("Loaded Intents", "No intent not found");
+                rejectPromise(APP_NOT_FOUND, "Payment app not found");
                 return;
             }
 
             Intent chooserIntent = Intent.createChooser(share, "Select");
-            //add new new task flag to prevent the main activity from restarting
-            chooserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            this.reactContext.startActivity(chooserIntent);
+            currentActivity.startActivityForResult(chooserIntent, PAYMENT_REQUEST);
         } else {
-            Log.d("Loaded Intents", "No intents to be loaded at this time");
+            rejectPromise(NO_APP_LIST, "Unable to retrieve application list");
         }
     }
 
     @Override
     public void onHostResume() {
-        Log.d("Activity resumed","Activity has resumed");
+
     }
 
     @Override
@@ -106,5 +164,13 @@ public class RNDashpaySdkModule extends ReactContextBaseJavaModule implements Li
 
     @Override
     public void onHostDestroy() {
+        this.mPaymentPromise = null;
+    }
+
+    private void rejectPromise(String code, String message) {
+        if (this.mPaymentPromise != null) {
+            this.mPaymentPromise.reject(code, message);
+            this.mPaymentPromise = null;
+        }
     }
 }
