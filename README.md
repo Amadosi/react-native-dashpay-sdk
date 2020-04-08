@@ -39,7 +39,12 @@
 ```javascript
 import RNDashpaySdk from 'react-native-dashpay-sdk';
 
-// TODO: What to do with the module?
-RNDashpaySdk;
+const paymentRef = '12345';
+const amount = '200';
+
+// Simply call the pay function by passing the payment reference and amount to be paid
+// This returns a promise
+RNDashpaySdk.pay(paymentRef, amount)
+.then(data=>console.log(data))
+.catch(err=>console.log(err.message));
 ```
-  
