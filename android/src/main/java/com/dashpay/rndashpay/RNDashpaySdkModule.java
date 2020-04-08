@@ -30,6 +30,7 @@ import com.facebook.react.bridge.LifecycleEventListener;
 import com.facebook.react.bridge.ActivityEventListener;
 import com.facebook.react.bridge.BaseActivityEventListener;
 import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.Arguments;
 
 import android.util.Log;
@@ -37,7 +38,7 @@ import android.util.Log;
 public class RNDashpaySdkModule extends ReactContextBaseJavaModule implements LifecycleEventListener {
 
     private final ReactApplicationContext reactContext;
-    private static final String PAYMENT_URI = "com.ar.pos";
+    private static String PAYMENT_URI = "com.ar.dashpaypos";
     public static int tsn = 1;
     public static int lastSentTsn = 0;
     private static final int PAYMENT_REQUEST = 11234;
@@ -108,6 +109,16 @@ public class RNDashpaySdkModule extends ReactContextBaseJavaModule implements Li
     public String getName() {
         return "RNDashpaySdk";
     }
+
+    @ReactMethod
+    public static void config(ReadableMap options){
+        String paymentUri = options.getString("payment_uri");
+
+           if (paymentUri != null) {
+                PAYMENT_URI = paymentUri;
+           }
+    }
+
 
     @ReactMethod
     public void pay(String reference, String amount, final Promise promise) {
