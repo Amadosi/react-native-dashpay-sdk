@@ -39,9 +39,11 @@ public class RNDashpaySdkModule extends ReactContextBaseJavaModule implements Li
 
     private final ReactApplicationContext reactContext;
     private static String PAYMENT_URI = "com.ar.dashpaypos";
+    private static String PRINT_URI = "com.dashpay.bridge";
     public static int tsn = 1;
     public static int lastSentTsn = 0;
     private static final int PAYMENT_REQUEST = 11234;
+    private static final int PRINT_REQUEST = 11233;
 
     private String NO_APP_LIST = "APP_NOT_FOUND";
     private String APP_NOT_FOUND = "APP_NOT_FOUND";
@@ -52,6 +54,7 @@ public class RNDashpaySdkModule extends ReactContextBaseJavaModule implements Li
     public static String PACKAGE_NAME;
 
     private Promise mPaymentPromise;
+    private Promise mPrintPromise;
 
     private final ActivityEventListener mActivityEventListener = new BaseActivityEventListener() {
 
@@ -92,6 +95,16 @@ public class RNDashpaySdkModule extends ReactContextBaseJavaModule implements Li
                     }
 
                     mPaymentPromise = null;
+                }else if (requestCode == PRINT_REQUEST){
+                        if (mPrintPromise != null) {
+                            if (resultCode == Activity.RESULT_OK){
+                                String result = intent.getStringExtra("RESULT");
+                                mPrintPromise.resolve(result);
+                            }else if(resultCode == Activity.RESULT_CANCELED){
+                            rejectPromise(TRN_FAILED, "No print result");
+                            }
+                        }
+                            mPrintPromise = null;
                 }
             }
         }
@@ -164,6 +177,54 @@ public class RNDashpaySdkModule extends ReactContextBaseJavaModule implements Li
         }
     }
 
+    @ReactMethod
+        public void print(String reference, String amount, String policy_no, String narration,
+                         String customer_name, String agent_name, String date, final Promise promise) {
+
+            Activity currentActivity = getCurrentActivity();
+            mPrintPromise = promise;
+
+            boolean found = false;
+            Intent share = new Intent(android.content.Intent.ACTION_SEND);
+            share.setType("text/plain");
+
+            // gets the list of intents that can be loaded.
+            List<ResolveInfo> resInfo = reactContext.getPackageManager().queryIntentActivities(share, 0);
+            if (!resInfo.isEmpty()) {
+                for (ResolveInfo info : resInfo) {
+                    if (info.activityInfo.packageName.toLowerCase().contains(PRINT_URI) ||
+                            info.activityInfo.name.toLowerCase().contains(PRINT_URI)) {
+                        share.putExtra(Intent.EXTRA_ORIGINATING_URI, PACKAGE_NAME);
+                        share.putExtra("key", "Print");
+
+                        String printString = "Date:"+date+"|"+
+                                             "Reference No: "+reference+"|"+
+                                             "Policy No: "+policy_no+"|"+
+                                             "Amount: "+amount+"|"+
+                                             "Narration: "+narration+"|"+
+                                             "Customer Name: "+customer_name+"|"+
+                                             "Agent Name: "+agent_name+"|||"+
+                                             "....powered by www.openfactorgroup.com";
+                        share.putExtra("printString", printString);
+
+                        share.setPackage(info.activityInfo.packageName);
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    rejectPromise(APP_NOT_FOUND, "Print app not found");
+                    return;
+                }
+
+                Intent chooserIntent = Intent.createChooser(share, "Select");
+                currentActivity.startActivityForResult(chooserIntent,PRINT_REQUEST);
+            } else {
+                rejectPromise(NO_APP_LIST, "Unable to retrieve application list");
+            }
+        }
+
     @Override
     public void onHostResume() {
 
@@ -183,5 +244,10 @@ public class RNDashpaySdkModule extends ReactContextBaseJavaModule implements Li
             this.mPaymentPromise.reject(code, message);
             this.mPaymentPromise = null;
         }
+
+        if (this.mPrintPromise != null) {
+                    this.mPrintPromise.reject(code, message);
+                    this.mPrintPromise = null;
+                }
     }
 }
