@@ -1,7 +1,7 @@
 
 {
   "name": "react-native-dashpay-sdk",
-  "version": "1.0.40",
+  "version": "1.0.41",
   "description": "An android native wrapper for communicating and transacting with the Dashpay payment application",
   "homepage":"https://github.com/Amadosi/react-native-dashpay-sdk",
   "url" : "https://github.com/Amadosi/react-native-dashpay-sdk/issues"
