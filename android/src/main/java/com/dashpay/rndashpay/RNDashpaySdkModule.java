@@ -203,7 +203,7 @@ public class RNDashpaySdkModule extends ReactContextBaseJavaModule implements Li
                                              "Amount: "+amount+"|"+
                                              "Narration: "+narration+"|"+
                                              "Customer Name: "+customer_name+"|"+
-                                             "Agent Name: "+agent_name+"|||"+
+                                             "Agent Name: "+agent_name+"|"+
                                              "....powered by www.openfactorgroup.com";
                         share.putExtra("printString", printString);
 
@@ -224,6 +224,44 @@ public class RNDashpaySdkModule extends ReactContextBaseJavaModule implements Li
                 rejectPromise(NO_APP_LIST, "Unable to retrieve application list");
             }
         }
+
+        @ReactMethod
+                public void printString(String printString,  final Promise promise) {
+
+                    Activity currentActivity = getCurrentActivity();
+                    mPrintPromise = promise;
+
+                    boolean found = false;
+                    Intent share = new Intent(android.content.Intent.ACTION_SEND);
+                    share.setType("text/plain");
+
+                    // gets the list of intents that can be loaded.
+                    List<ResolveInfo> resInfo = reactContext.getPackageManager().queryIntentActivities(share, 0);
+                    if (!resInfo.isEmpty()) {
+                        for (ResolveInfo info : resInfo) {
+                            if (info.activityInfo.packageName.toLowerCase().contains(PRINT_URI) ||
+                                    info.activityInfo.name.toLowerCase().contains(PRINT_URI)) {
+                                share.putExtra(Intent.EXTRA_ORIGINATING_URI, PACKAGE_NAME);
+                                share.putExtra("key", "Print");
+                                share.putExtra("printString", printString);
+
+                                share.setPackage(info.activityInfo.packageName);
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        if (!found) {
+                            rejectPromise(APP_NOT_FOUND, "Print app not found");
+                            return;
+                        }
+
+                        Intent chooserIntent = Intent.createChooser(share, "Select");
+                        currentActivity.startActivityForResult(chooserIntent,PRINT_REQUEST);
+                    } else {
+                        rejectPromise(NO_APP_LIST, "Unable to retrieve application list");
+                    }
+                }
 
     @Override
     public void onHostResume() {
